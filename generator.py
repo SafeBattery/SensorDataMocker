@@ -7,8 +7,13 @@ import time
 def parse_arguments():
     parser = argparse.ArgumentParser(description="PEMFC 센서 데이터를 CSV 파일에서 읽어 POST 전송")
     parser.add_argument('-f', '--file', required=True, help="CSV 파일의 경로 (예: full_csv_data.csv)")
-    parser.add_argument('-s', '--start', type=int, required=True, help="CSV 읽기 시작 행(0-based index)")
-    parser.add_argument('-e', '--end', type=int, required=True, help="CSV 읽기 끝 행(읽을 마지막 행의 인덱스, end는 포함되지 않음)")
+    parser.add_argument('-p1', '--pemfc1', type=int, required=True, help="pemfc1의 id")
+    parser.add_argument('-p2', '--pemfc2', type=int, required=True, help="pemfc2의 id")
+    parser.add_argument('-p3', '--pemfc3', type=int, required=True, help="pemfc3의 id")
+    parser.add_argument('-s1', '--start1', type=int, required=True, help="pemfc1의 CSV 읽기 시작 행(0-based index)")
+    parser.add_argument('-s2', '--start2', type=int, required=True, help="pemfc2의 CSV 읽기 시작 행(0-based index)")
+    parser.add_argument('-s3', '--start3', type=int, required=True, help="pemfc3의 CSV 읽기 시작 행(0-based index)")
+    parser.add_argument('-o', '--offset', type=int, required=True, help="CSV에서 읽어올 행 수")
     parser.add_argument('-u', '--url', required=True, help="데이터를 POST할 URL")
     parser.add_argument('-t', '--time', type=float, required=True, help="각 POST 요청 사이의 인터벌(초 단위)")
     return parser.parse_args()
@@ -57,17 +62,41 @@ def main():
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
-        if args.start < 0 or args.end > len(rows):
-            print("지정한 범위가 CSV 파일의 행 수를 벗어납니다.")
-            return
+        total_rows = len(rows)
 
-        # 지정한 범위의 각 행을 순서대로 처리
-        for idx in range(args.start, args.end):
-            row = rows[idx]
-            payload = convert_row_to_json(row)
-            print(f"전송할 데이터 (행 {idx}): {payload}")
-            post_data(payload, args.url)
-            # 지정한 인터벌 만큼 대기
+        # 각 PEMFC별 URL 구성
+        url1 = args.url.replace("{pemfc_id}", str(args.pemfc1))
+        url2 = args.url.replace("{pemfc_id}", str(args.pemfc2))
+        url3 = args.url.replace("{pemfc_id}", str(args.pemfc3))
+
+        # 모든 시작 인덱스 + offset이 범위 내에 있는지 확인
+        for start in [args.start1, args.start2, args.start3]:
+            if start < 0 or (start + args.offset) > total_rows:
+                print(f"지정한 시작 인덱스 {start} 또는 범위가 CSV 데이터 수({total_rows}행)를 벗어납니다.")
+                return
+
+        for i in range(args.offset):
+            idx1 = args.start1 + i
+            idx2 = args.start2 + i
+            idx3 = args.start3 + i
+
+            row1 = rows[idx1]
+            row2 = rows[idx2]
+            row3 = rows[idx3]
+
+            payload1 = convert_row_to_json(row1)
+            payload2 = convert_row_to_json(row2)
+            payload3 = convert_row_to_json(row3)
+
+            print(f"[{i}] PEMFC1 행 {idx1}: {payload1}")
+            post_data(payload1, url1)
+
+            print(f"[{i}] PEMFC2 행 {idx2}: {payload2}")
+            post_data(payload2, url2)
+
+            print(f"[{i}] PEMFC3 행 {idx3}: {payload3}")
+            post_data(payload3, url3)
+
             time.sleep(args.time)
 
 if __name__ == '__main__':
